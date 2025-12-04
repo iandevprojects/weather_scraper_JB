@@ -86,3 +86,26 @@ echo "--- SUN TIMES (sun_times table) ---"
 echo "sunrise:        $sunrise"
 echo "sunset:         $sunset"
 echo ""
+
+# MySQL credentials
+DB_USER="root"
+DB_PASS=""
+DB_NAME="weather_db"
+
+echo "Testing MySQL connection..."
+
+# Could not access path and thus used the direct path
+MYSQL_BIN="/c/xampp/mysql/bin/mysql.exe"
+
+# Used --password= as the password is set to empty
+if [ -z "$DB_PASS" ]; then
+    $MYSQL_BIN -u $DB_USER --password= -e "SELECT NOW();" $DB_NAME
+else
+    $MYSQL_BIN -u $DB_USER -p"$DB_PASS" -e "SELECT NOW();" $DB_NAME
+fi
+
+if [ $? -eq 0 ]; then
+    echo "MySQL connection successful!"
+else
+    echo "Failed to connect to MySQL."
+fi
