@@ -1,4 +1,6 @@
 #!/bin/bash
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
 
 URL="https://weather.yahoo.com/my/johor/johor-baharu"
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
@@ -32,6 +34,9 @@ echo "feels_like:     $feels_like"
 echo "humidity:       $humidity"
 echo ""
 
+INSERT_CURRENT="INSERT INTO current_weather (timestamp, temperature, weather_condition, feels_like, humidity)
+VALUES ('$TIMESTAMP', $temperature, '$condition', $feels_like, $humidity);"
+
 # 2. Track wind data
 
 wind_text=$(echo "$PAGE" \
@@ -45,6 +50,9 @@ echo "--- WIND DATA (wind_data table) ---"
 echo "wind_speed:     $wind_speed"
 echo "wind_direction: $wind_dir"
 echo ""
+
+INSERT_WIND="INSERT INTO wind_data (timestamp, wind_speed, wind_direction)
+VALUES ('$TIMESTAMP', $wind_speed, '$wind_dir');"
 
 # 3. Atmospheric data
 
@@ -74,6 +82,9 @@ echo "uv_label:       $uv_label"
 echo "uv_value:       $uv_value"
 echo ""
 
+INSERT_ATMOS="INSERT INTO atmospheric_data (timestamp, visibility, pressure, aq_label, aq_value, uv_label, uv_value)
+VALUES ('$TIMESTAMP', '$visibility', '$pressure', '$aq_label', $aq_value, '$uv_label', $uv_value);"
+
 # 4. Track sun times
 
 sun_times=$(echo "$PAGE" \
@@ -87,6 +98,10 @@ echo "sunrise:        $sunrise"
 echo "sunset:         $sunset"
 echo ""
 
+INSERT_SUN="INSERT INTO sun_times (timestamp, sunrise, sunset)
+VALUES ('$TIMESTAMP', '$sunrise', '$sunset');"
+
+
 # MySQL credentials
 DB_USER="root"
 DB_PASS=""
@@ -98,11 +113,19 @@ echo "Testing MySQL connection..."
 MYSQL_BIN="/c/xampp/mysql/bin/mysql.exe"
 
 # Used --password= as the password is set to empty
+# If password is empty
 if [ -z "$DB_PASS" ]; then
-    $MYSQL_BIN -u $DB_USER --password= -e "SELECT NOW();" $DB_NAME
+    $MYSQL_BIN -u $DB_USER --password= -D $DB_NAME -e "$INSERT_CURRENT"
+    $MYSQL_BIN -u $DB_USER --password= -D $DB_NAME -e "$INSERT_WIND"
+    $MYSQL_BIN -u $DB_USER --password= -D $DB_NAME -e "$INSERT_ATMOS"
+    $MYSQL_BIN -u $DB_USER --password= -D $DB_NAME -e "$INSERT_SUN"
 else
-    $MYSQL_BIN -u $DB_USER -p"$DB_PASS" -e "SELECT NOW();" $DB_NAME
+    $MYSQL_BIN -u $DB_USER -p"$DB_PASS" -D $DB_NAME -e "$INSERT_CURRENT"
+    $MYSQL_BIN -u $DB_USER -p"$DB_PASS" -D $DB_NAME -e "$INSERT_WIND"
+    $MYSQL_BIN -u $DB_USER -p"$DB_PASS" -D $DB_NAME -e "$INSERT_ATMOS"
+    $MYSQL_BIN -u $DB_USER -p"$DB_PASS" -D $DB_NAME -e "$INSERT_SUN"
 fi
+
 
 if [ $? -eq 0 ]; then
     echo "MySQL connection successful!"
