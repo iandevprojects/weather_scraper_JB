@@ -60,8 +60,8 @@ visibility=$(echo "$PAGE" \
   | grep -oP '<p class="font-label2 font-size-label2 font-weight-label2 leading-label2 case-label2 text-center justify-center text-blue-12">\K[^<]+' \
   | head -1)
 pressure=$(echo "$PAGE" \
-  | grep -oP '<p class="font-label2 font-size-label2 font-weight-label2 leading-label2 case-label2 text-center justify-center text-red-12">\K[^<]+' \
-  | head -1)
+  | grep -A3 'Pressure' \
+  | grep -oP '<p[^>]*text-blue-12[^>]*>\K[^<]+')
 aq_text=$(echo "$PAGE" \
   | grep -oP '<p class="font-label2 font-size-label2 font-weight-label2 leading-label2 case-label2 text-center justify-center text-green-12">\K[^<]+' \
   | head -1)
