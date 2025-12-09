@@ -132,3 +132,5 @@ if [ $? -eq 0 ]; then
 else
     echo "Failed to connect to MySQL."
 fi
+
+sleep 5
