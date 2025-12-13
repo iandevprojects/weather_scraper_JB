@@ -1,6 +1,29 @@
 #!/bin/bash
+
+# The code below enables strict bash mode which helps in error handling
+set -Eeuo pipefail
+IFS=$'\n\t'
+
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
+
+# Simple error handler
+trap 'echo "[ERROR] Script failed at line $LINENO"; exit 1' ERR
+
+# Helps to produce a safe value in case of any values failing
+safe_value() {
+  local val="$1"
+  local default="$2"
+  if [[ -z "$val" ]]; then
+    echo "$default"
+  else
+    echo "$val"
+  fi
+}
+
+is_number() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
 
 URL="https://weather.yahoo.com/my/johor/johor-baharu"
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
@@ -9,7 +32,15 @@ echo "========== WEATHER SCRAPER RUN AT $TIMESTAMP =========="
 
 echo ""
 echo "Fetching page..."
-PAGE=$(curl -s "$URL")
+PAGE=$(curl -fsSL "$URL") || {
+  echo "[ERROR] Failed to fetch page from $URL"
+  exit 1
+}
+
+if [[ -z "$PAGE" ]]; then
+  echo "[ERROR] Empty response from weather page"
+  exit 1
+fi
 
 # 1. Track current weather
 
@@ -25,6 +56,17 @@ feels_like=$(echo "$PAGE" \
 humidity=$(echo "$PAGE" \
   | grep -oP 'Very humid · \K[0-9]+' \
   | head -1)
+
+# Make the values safer
+
+if ! is_number "$temperature"; then temperature=""; fi
+if ! is_number "$feels_like"; then feels_like=""; fi
+if ! is_number "$humidity"; then humidity=""; fi
+
+temperature=$(safe_value "$temperature" "NULL")
+feels_like=$(safe_value "$feels_like" "NULL")
+humidity=$(safe_value "$humidity" "NULL")
+condition=$(safe_value "$condition" "Unknown")
 
 echo "--- CURRENT WEATHER (current_weather table) ---"
 echo "timestamp:      $TIMESTAMP"
@@ -50,6 +92,13 @@ echo "--- WIND DATA (wind_data table) ---"
 echo "wind_speed:     $wind_speed"
 echo "wind_direction: $wind_dir"
 echo ""
+
+# Make the values safer
+
+if ! is_number "$wind_speed"; then wind_speed=""; fi
+
+wind_speed=$(safe_value "$wind_speed" "NULL")
+wind_dir=$(safe_value "$wind_dir" "Unknown")
 
 INSERT_WIND="INSERT INTO wind_data (timestamp, wind_speed, wind_direction)
 VALUES ('$TIMESTAMP', $wind_speed, '$wind_dir');"
@@ -85,6 +134,20 @@ echo "uv_label:       $uv_label"
 echo "uv_value:       $uv_value"
 echo ""
 
+# Make the values safer
+
+visibility=$(safe_value "$visibility" "Unknown")
+pressure=$(safe_value "$pressure" "Unknown")
+
+if ! is_number "$aq_value"; then aq_value=""; fi
+if ! is_number "$uv_value"; then uv_value=""; fi
+
+aq_value=$(safe_value "$aq_value" "NULL")
+uv_value=$(safe_value "$uv_value" "NULL")
+
+aq_label=$(safe_value "$aq_label" "Unknown")
+uv_label=$(safe_value "$uv_label" "Unknown")
+
 INSERT_ATMOS="INSERT INTO atmospheric_data (timestamp, visibility, pressure, aq_label, aq_value, uv_label, uv_value)
 VALUES ('$TIMESTAMP', '$visibility', '$pressure', '$aq_label', $aq_value, '$uv_label', $uv_value);"
 
@@ -100,6 +163,11 @@ echo "--- SUN TIMES (sun_times table) ---"
 echo "sunrise:        $sunrise"
 echo "sunset:         $sunset"
 echo ""
+
+# Make the values safer
+
+sunrise=$(safe_value "$sunrise" "Unknown")
+sunset=$(safe_value "$sunset" "Unknown")
 
 INSERT_SUN="INSERT INTO sun_times (timestamp, sunrise, sunset)
 VALUES ('$TIMESTAMP', '$sunrise', '$sunset');"
