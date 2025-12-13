@@ -186,6 +186,8 @@ plot_wind_speed_direction() {
     set style fill solid 1.0 border -1
     set grid ytics
 
+    set yrange [0:*]   # start y-axis at 0
+
     plot "$DAT_DIR/wind_direction_avg_clean.dat" using 2:xtic(1) title ""
 EOF
 
