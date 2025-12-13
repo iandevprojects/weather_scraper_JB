@@ -153,7 +153,7 @@ EOF
   echo "Saved: $OUTPUT_DIR/humidity_hourly_$TIMESTAMP.png"
 }
 
-# Wind speed vs direction
+# 4. Wind speed vs direction
 plot_wind_speed_direction() {
   echo "Generating wind speed by direction plot..."
 
@@ -192,6 +192,49 @@ EOF
   echo "Saved: $OUTPUT_DIR/wind_direction_$TIMESTAMP.png"
 }
 
+# 5. Plot weather condition
+plot_weather_condition() {
+  echo "Generating weather condition count bar chart..."
+
+  DAT_DIR="$OUTPUT_DIR/dat"
+  mkdir -p "$DAT_DIR"
+
+  # 1. Extract counts per weather condition
+  $MYSQL_BIN -u "$DB_USER" --password="$DB_PASS" -D "$DB_NAME" -e "
+  SELECT UPPER(TRIM(\`weather_condition\`)) AS cond, COUNT(*) AS count
+  FROM current_weather
+  GROUP BY cond
+  ORDER BY count DESC;
+" > "$DAT_DIR/weather_condition_counts.dat"
+
+  # Remove header
+  tail -n +2 "$DAT_DIR/weather_condition_counts.dat" > "$DAT_DIR/weather_condition_counts_clean.dat"
+
+  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+  # 2. Plot using gnuplot
+  gnuplot <<EOF
+    set terminal png size 1200,600
+    set output "$OUTPUT_DIR/weather_condition_counts_$TIMESTAMP.png"
+
+    set title "Weather Condition Counts"
+    set xlabel "Weather Condition"
+    set ylabel "Count"
+
+    set style data histograms
+    set style fill solid 1.0 border -1
+    set boxwidth 0.6
+
+    set datafile separator "\t"      # Important: handle tab-delimited file
+    set xtics rotate by -45
+
+    plot "$DAT_DIR/weather_condition_counts_clean.dat" using 2:xtic(1) linecolor rgb "skyblue" title "Count"
+EOF
+
+  echo "Saved: $OUTPUT_DIR/weather_condition_counts_$TIMESTAMP.png"
+}
+
+
 # The main handle script argument
 case "${1:-}" in
   temperature)
@@ -205,6 +248,9 @@ case "${1:-}" in
     ;;
   wind)
     plot_wind_speed_direction
+    ;;
+  weather_condition)
+    plot_weather_condition
     ;;
   *)
     echo "Usage: $0 {temperature|temp_vs_feels|humidity|wind}"
