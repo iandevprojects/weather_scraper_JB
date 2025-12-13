@@ -234,6 +234,251 @@ EOF
   echo "Saved: $OUTPUT_DIR/weather_condition_counts_$TIMESTAMP.png"
 }
 
+# 6. Plot Air Quality Over Time
+plot_air_quality_over_time() {
+  echo "Generating daily average Air Quality plot..."
+
+  DAT_DIR="$OUTPUT_DIR/dat"
+  mkdir -p "$DAT_DIR"
+
+  # 1. Extract daily average AQ value
+  $MYSQL_BIN -u "$DB_USER" --password="$DB_PASS" -D "$DB_NAME" -e "
+    SELECT DATE(timestamp) AS day, AVG(aq_value) AS avg_aq
+    FROM atmospheric_data
+    GROUP BY day
+    ORDER BY day;
+  " > "$DAT_DIR/air_quality_daily.dat"
+
+  # Remove header
+  tail -n +2 "$DAT_DIR/air_quality_daily.dat" > "$DAT_DIR/air_quality_daily_clean.dat"
+
+  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+  # 2. Plot with gnuplot
+  gnuplot <<EOF
+    set terminal png size 1200,600
+    set output "$OUTPUT_DIR/air_quality_over_time_$TIMESTAMP.png"
+
+    set title "Daily Average Air Quality"
+    set xlabel "Date"
+    set ylabel "Average AQ Value"
+    set grid
+
+    set xdata time
+    set timefmt "%Y-%m-%d"
+    set format x "%m-%d"
+    set xtics rotate by -45
+
+    plot "$DAT_DIR/air_quality_daily_clean.dat" using 1:2 with linespoints pt 7 lc rgb "green" title "Avg AQ"
+EOF
+
+  echo "Saved: $OUTPUT_DIR/air_quality_over_time_$TIMESTAMP.png"
+}
+
+
+# 7. Plot Pressure Distribution
+plot_pressure_distribution() {
+  echo "Generating Pressure Distribution bar chart..."
+
+  DAT_DIR="$OUTPUT_DIR/dat"
+  mkdir -p "$DAT_DIR"
+
+  # 1. Extract counts per pressure level
+  $MYSQL_BIN -u "$DB_USER" --password="$DB_PASS" -D "$DB_NAME" -e "
+    SELECT pressure, COUNT(*) AS count
+    FROM atmospheric_data
+    GROUP BY pressure
+    ORDER BY count DESC;
+  " > "$DAT_DIR/pressure_counts.dat"
+
+  # Remove header
+  tail -n +2 "$DAT_DIR/pressure_counts.dat" > "$DAT_DIR/pressure_counts_clean.dat"
+
+  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+  # 2. Plot with gnuplot
+  gnuplot <<EOF
+    set terminal png size 1200,600
+    set output "$OUTPUT_DIR/pressure_distribution_$TIMESTAMP.png"
+
+    set title "Pressure Distribution"
+    set xlabel "Pressure"
+    set ylabel "Count"
+
+    set style data histograms
+    set style fill solid 1.0 border -1
+    set boxwidth 0.6
+
+    set datafile separator "\t"
+    set xtics rotate by -45
+
+    set yrange [0:*]           # <-- force y-axis to start at 0
+
+    plot "$DAT_DIR/pressure_counts_clean.dat" using 2:xtic(1) linecolor rgb "orange" title "Count"
+EOF
+
+  echo "Saved: $OUTPUT_DIR/pressure_distribution_$TIMESTAMP.png"
+}
+
+# 8. Plot UV value over time
+plot_uv_over_time() {
+  echo "Generating UV Index Over Time plot..."
+
+  DAT_DIR="$OUTPUT_DIR/dat"
+  mkdir -p "$DAT_DIR"
+
+  # 1. Extract average UV value per date
+  $MYSQL_BIN -u "$DB_USER" --password="$DB_PASS" -D "$DB_NAME" -e "
+    SELECT DATE(timestamp) AS day, ROUND(AVG(uv_value),1) AS avg_uv
+    FROM atmospheric_data
+    GROUP BY day
+    ORDER BY day;
+  " > "$DAT_DIR/uv_over_time.dat"
+
+  # Remove header
+  tail -n +2 "$DAT_DIR/uv_over_time.dat" > "$DAT_DIR/uv_over_time_clean.dat"
+
+  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+  # 2. Plot with gnuplot
+  gnuplot <<EOF
+    set terminal png size 1200,600
+    set output "$OUTPUT_DIR/uv_over_time_$TIMESTAMP.png"
+
+    set title "Average UV Index Over Time"
+    set xlabel "Date"
+    set ylabel "UV Value"
+    set grid
+
+    set xdata time
+    set timefmt "%Y-%m-%d"
+    set format x "%m-%d"
+    set xtics rotate by -45
+
+    plot "$DAT_DIR/uv_over_time_clean.dat" using 1:2 with linespoints pt 7 lc rgb "purple" title "UV Value"
+EOF
+
+  echo "Saved: $OUTPUT_DIR/uv_over_time_$TIMESTAMP.png"
+}
+
+# 9. Plot temperature vs humidity
+plot_temperature_vs_humidity() {
+  echo "Generating Temperature vs Humidity scatter plot (°C)..."
+
+  DAT_DIR="$OUTPUT_DIR/dat"
+  mkdir -p "$DAT_DIR"
+
+  # 1. Extract temperature (converted to °C) and humidity
+  $MYSQL_BIN -u "$DB_USER" --password="$DB_PASS" -D "$DB_NAME" -e "
+    SELECT ROUND((temperature - 32) * 5 / 9, 1) AS temp_c, humidity
+    FROM current_weather
+    ORDER BY timestamp;
+  " > "$DAT_DIR/temp_vs_humidity.dat"
+
+  # Remove header
+  tail -n +2 "$DAT_DIR/temp_vs_humidity.dat" > "$DAT_DIR/temp_vs_humidity_clean.dat"
+
+  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+  # 2. Plot with gnuplot
+  gnuplot <<EOF
+    set terminal png size 1200,600
+    set output "$OUTPUT_DIR/temp_vs_humidity_$TIMESTAMP.png"
+
+    set title "Temperature vs Humidity"
+    set xlabel "Temperature (°C)"
+    set ylabel "Humidity (%)"
+    set grid
+
+    plot "$DAT_DIR/temp_vs_humidity_clean.dat" using 1:2 with points pt 7 lc rgb "blue" title "Humidity"
+EOF
+
+  echo "Saved: $OUTPUT_DIR/temp_vs_humidity_$TIMESTAMP.png"
+}
+
+# 10. Plot sun times
+plot_sunrise_sunset() {
+  echo "Generating daily sunrise and sunset plots..."
+
+  DAT_DIR="$OUTPUT_DIR/dat"
+  mkdir -p "$DAT_DIR"
+
+  # 1. Extract one row per date (min timestamp)
+  $MYSQL_BIN -u "$DB_USER" --password="$DB_PASS" -D "$DB_NAME" -e "
+    SELECT DATE(timestamp) AS day,
+       MIN(NULLIF(sunrise, '00:00:00')) AS sunrise,
+       MIN(NULLIF(sunset, '00:00:00')) AS sunset
+  FROM sun_times
+  GROUP BY day
+  ORDER BY day;
+  " > "$DAT_DIR/sun_times_daily.dat"
+
+  tail -n +2 "$DAT_DIR/sun_times_daily.dat" > "$DAT_DIR/sun_times_daily_clean.dat"
+
+  # 2. Convert times to seconds since midnight
+  awk '{
+    day=$1
+
+    # Sunrise (AM assumed)
+    split($2, t, ":")
+    sunrise=t[1]*3600 + t[2]*60
+
+    # Sunset (convert PM if needed)
+    split($3, t, ":")
+    hr=t[1]+0; min=t[2]+0
+    if(hr < 12) hr += 12   # adjust PM
+    sunset=hr*3600 + min*60
+
+    print day, sunrise, sunset
+  }' "$DAT_DIR/sun_times_daily_clean.dat" > "$DAT_DIR/sun_times_seconds.dat"
+
+  # 3. Generate y-axis mapping (date to row number)
+  awk '{print NR-1, $1}' "$DAT_DIR/sun_times_seconds.dat" > "$DAT_DIR/sun_times_ytics.dat"
+  YTICS=$(awk '{printf "\"%s\" %d, ", $2, $1}' "$DAT_DIR/sun_times_ytics.dat")
+  YTICS=${YTICS%, }  # remove trailing comma
+
+  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+  # 4. Sunrise plot
+  gnuplot <<EOF
+set terminal png size 1200,600
+set output "$OUTPUT_DIR/sunrise_$TIMESTAMP.png"
+
+set title "Sunrise Times by Day"
+set ylabel "Time of Day"
+set xlabel "Date"
+set grid
+
+set ydata time
+set timefmt "%s"
+set format y "%H:%M"
+set xtics ($YTICS)
+
+plot "$DAT_DIR/sun_times_seconds.dat" using 0:2 with linespoints pt 7 lc rgb "orange" title "Sunrise"
+EOF
+
+  # 5. Sunset plot
+  gnuplot <<EOF
+set terminal png size 1200,600
+set output "$OUTPUT_DIR/sunset_$TIMESTAMP.png"
+
+set title "Sunset Times by Day"
+set ylabel "Time of Day"
+set xlabel "Date"
+set grid
+
+set ydata time
+set timefmt "%s"
+set format y "%H:%M"
+set xtics ($YTICS)
+
+plot "$DAT_DIR/sun_times_seconds.dat" using 0:3 with linespoints pt 7 lc rgb "blue" title "Sunset"
+EOF
+
+  echo "Saved: $OUTPUT_DIR/sunrise_$TIMESTAMP.png"
+  echo "Saved: $OUTPUT_DIR/sunset_$TIMESTAMP.png"
+}
+
 
 # The main handle script argument
 case "${1:-}" in
@@ -251,6 +496,21 @@ case "${1:-}" in
     ;;
   weather_condition)
     plot_weather_condition
+    ;;
+  pressure)
+    plot_pressure_distribution
+    ;;
+  air_quality)
+    plot_air_quality_over_time
+    ;;
+  uv_value)
+    plot_uv_over_time
+    ;;
+  temp_vs_humidity)
+    plot_temperature_vs_humidity
+    ;;
+  sun_times)
+    plot_sunrise_sunset
     ;;
   *)
     echo "Usage: $0 {temperature|temp_vs_feels|humidity|wind}"
